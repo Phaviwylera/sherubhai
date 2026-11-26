@@ -10,6 +10,7 @@ remote=$(git rev-parse FETCH_HEAD)
 current=$(cat /var/lib/sheru-studio/deployed-sha 2>/dev/null || true)
 if [[ "$remote" == "$current" ]]; then exit 0; fi
 git reset --hard "$remote"
+chown ubuntu:ubuntu "$repo/SheruStudio"
 mkdir -p "$repo/SheruStudio/studio-data" "$repo/SheruStudio/logs" "$repo/SheruStudio/exports"
 chown -R ubuntu:ubuntu "$repo/SheruStudio/studio-data" "$repo/SheruStudio/logs" "$repo/SheruStudio/exports"
 python3 -m venv "$repo/.venv"
