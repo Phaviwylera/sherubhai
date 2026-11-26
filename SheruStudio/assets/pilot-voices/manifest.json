@@ -1,0 +1,46 @@
+{
+  "shots": [
+    {
+      "speaker": "Sheru",
+      "line": "அண்ணே, ஒரு டீ. ஸ்ட்ராங்கா.",
+      "file": "voice-01.mp3",
+      "sha256": "b535ec4cb9bfd645896b63d4b5fd8ee8479237d8a68b9f4a474bd09a79adbc71"
+    },
+    {
+      "speaker": "tea master",
+      "line": "என்னடா ஷேரு, புதுக் காரா? எவ்வளவு?",
+      "file": "voice-02.mp3",
+      "sha256": "246f7c5a6df829c1371fd795adf798ee39647212d4918eea8385664d111a1486"
+    },
+    {
+      "speaker": "Sheru",
+      "line": "எட்டு கோடி, அண்ணே.",
+      "file": "voice-03.mp3",
+      "sha256": "7ad822cc6b0d623a0015795f169353f7b67fe7602a58da8f8a6df8723ca3ea7e"
+    },
+    {
+      "speaker": "tea master",
+      "line": "போன தடவை குடிச்ச டீக்கு பன்னெண்டு ரூபா பாக்கி.",
+      "file": "voice-04.mp3",
+      "sha256": "10a8ade0a72e4271fcc9ed70badf56c5702046ed134344c5d4ff12be6fdc08d1"
+    },
+    {
+      "speaker": "tea master",
+      "line": "ஞாபகம் இருக்கா?",
+      "file": "voice-05.mp3",
+      "sha256": "b7863ea6d4357af20851edda34b9a40b06359eef32b11005899ffc8a9b0f1492"
+    },
+    {
+      "speaker": "Sheru",
+      "line": "முருகா… இருபத்தி நாலு ரூபா இருக்காடா?",
+      "file": "voice-06.mp3",
+      "sha256": "88fa66f2bece3552b5f6aadcd46eedab1bfa60b32f9210efeeec1bc59e50c9b9"
+    },
+    {
+      "speaker": "Murugan",
+      "line": "எனக்கும் ஒரு டீ சொல்லுங்கண்ணே!",
+      "file": "voice-07.mp3",
+      "sha256": "e015e786ad324501a2b05149c407907ab222eeb2a26bdca1509aa2be65bcc5ce"
+    }
+  ]
+}

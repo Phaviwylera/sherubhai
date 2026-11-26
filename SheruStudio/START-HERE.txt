@@ -1,0 +1,12 @@
+AUTOMATIC ANIMATED EPISODE REPAIR
+
+Already installed: run Repair.cmd and choose your installation folder.
+Then click Render episode / Start automatic production. Failed current-revision
+clips are recovered automatically. Tamil mismatch triggers local speech repair;
+visual mismatch triggers corrected motion generation. The worker queues retries.
+
+First installation: run START-FRESH.cmd and choose the D-drive folder.
+It starts the animated pipeline automatically. Cloud access/quota are required.
+It does not replace the requested animation with still scenes.
+
+Read README-FIRST.txt for steps and the visible retry limits.

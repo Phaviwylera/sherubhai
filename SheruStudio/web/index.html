@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="studio-token" content="__TOKEN__"><title>Sheru Studio</title><link rel="stylesheet" href="/web/studio.css"></head>
+<body>
+<aside class="sidebar"><a class="brand" href="/">S<span>SHERU<br><small>PRODUCTION STUDIO</small></span></a>
+<div class="nav"><button class="active" data-tab="direct">◈ <span>Director’s desk</span></button><button data-tab="script">✎ <span>Tamil script</span></button><button data-tab="review">▷ <span>Review room</span></button><button data-tab="growth">↗ <span>Growth research</span></button><button data-tab="connections">→ <span>Connections</span></button></div>
+<div class="side-bottom"><div class="local-dot"></div> Local workspace<br><span>Vertical cinema · Tamil</span></div></aside>
+<main>
+<header><div class="breadcrumb">SHERU BHAI <span>/</span> SEASON ONE</div><div class="header-actions"><span class="pill">9:16 · 720 × 1280</span><button class="quiet" id="save">Save changes</button><button class="primary" id="render">Render episode <span>→</span></button></div></header>
+<section class="heading"><div><div class="eyebrow">DIRECTOR’S DESK</div><h1 id="title">A little tea.<br>A very big entrance.</h1><p id="subheading">Inspect a shot, generate its footage, and review each attempt.</p></div><div class="episode-meta"><span>EPISODE 01</span><strong id="total-duration">30<span>s</span></strong><small id="save-status">Loading project…</small></div></section>
+<div id="notice" role="status" hidden></div>
+<section id="direct" class="page">
+<div class="workspace">
+<div class="monitor-card"><div class="panel-top"><span>CHARACTER & FRAME</span><span class="muted">SHERU BHAI</span></div>
+<div class="monitor"><img id="reference" alt="Sheru Bhai character reference"><video id="player" controls playsinline hidden></video><div class="frame-tag" id="frame-tag">Character reference</div></div>
+<div class="monitor-bottom"><div><b>Sheru Bhai · character identity</b><span>Your reference defines the character’s identity.</span></div><label class="upload-label">Replace reference<input type="file" id="reference-upload" accept="image/*" hidden></label></div>
+</div>
+<div class="inspector">
+<div class="panel-top"><span>SHOT INSPECTOR</span><span id="shot-counter">01 / 06</span></div>
+<div class="shot-heading"><h2 id="shot-title">The order</h2><span class="pill" id="shot-length"></span></div>
+<label>TAMIL DIALOGUE<textarea id="line" class="tamil" rows="2"></textarea></label>
+<div class="two"><label>SPEAKER<input id="speaker"></label><label>LISTENER / TARGET<input id="listener"></label></div>
+<label>SCREEN POSITIONS<textarea id="blocking" rows="2"></textarea></label>
+<label>EYELINE & BODY ORIENTATION<textarea id="gaze" rows="2"></textarea></label>
+<details><summary>Camera, contact & continuity <span>+</span></summary>
+<label>CAMERA<textarea id="camera" rows="2"></textarea></label><label>ACTION<textarea id="action" rows="2"></textarea></label>
+<label>HANDS & PROP CONTACT<textarea id="hands" rows="2"></textarea></label><label>START STATE<textarea id="start" rows="2"></textarea></label>
+<label>END STATE<textarea id="end" rows="2"></textarea></label><label>TRANSITION<textarea id="transition" rows="2"></textarea></label>
+<div class="two"><label>SECONDS<input type="number" id="seconds" step=".1" min="1" max="30"></label><label>SPEECH START<input type="number" id="dialogue_start" step=".05" min="0"></label></div>
+<label>CORRECTIONS TO APPLY<textarea id="corrections" rows="2"></textarea></label></details>
+<details><summary>Sound & first frame <span>+</span></summary>
+<label>SOUND DIRECTION<textarea id="sfx" rows="2"></textarea></label>
+<p class="helper">Upload an approved first frame for image-to-video. Use the correct setting, pose and eyeline with Sheru’s reference identity.</p>
+<div class="upload-row"><label class="upload-label">First frame<input type="file" id="first-frame-upload" accept="image/*" hidden></label><label class="upload-label">Tamil voice<input type="file" id="voice-upload" accept=".wav,.mp3,.m4a" hidden></label><label class="upload-label">Sound effect<input type="file" id="sfx-upload" accept=".wav,.mp3,.m4a" hidden></label><label class="upload-label">Finished clip<input type="file" id="clip-upload" accept=".mp4,.mov,.webm" hidden></label></div>
+<div id="asset-status"></div><label>SOUND CUES · FILE / START / GAIN DB<textarea id="sound_cues" rows="3"></textarea></label>
+</details>
+<div class="inspector-actions"><button id="prompt-button" class="quiet">View full prompt</button><button id="render-shot" class="outline">Generate this shot →</button></div>
+</div></div>
+<div class="timeline-head"><h2>The sequence</h2><p>One speaker per shot. One clear intention.</p></div><div class="timeline" id="timeline"></div>
+<div class="surface automation-card"><div class="eyebrow">AUTOMATIC PRODUCTION</div><h2>Keep the episode moving.</h2><p class="helper">Generate the current script, screen each shot, retry visible defects, finish the master and prepare a growth plan. Temporary provider failures resume from completed shots. The free cloud routes below process your selected frames and prompts.</p><div id="automation-status" role="status"></div><div id="automation-destinations" class="helper"></div><div class="upload-row"><button id="start-auto" class="primary">Start automatic production →</button><button id="pause-auto" class="outline">Pause automatic retries</button><button id="resume-render" class="outline">Resume selected render</button><button id="recheck-clips" class="outline">Recheck saved clips · no generation</button><button id="open-clips" class="outline">Open completed clips</button><details><summary>Storyboard preview only</summary><button id="finish-illustrated" class="outline">Create illustrated storyboard · still characters</button></details></div><p class="helper">Finish illustrated episode retains available completed video clips and fills remaining slots with scene images, slow camera moves, exact Tamil speech and original sound accents. Characters in illustrated segments stay still. No video GPU request is made.</p><p class="helper">Keep Studio open and this computer awake. Account authorization and final playback review remain necessary. Automated checks cannot establish flawless physics or Tamil lip synchronization.</p></div><div class="pipeline"><div class="panel-top"><span>PRODUCTION ACTIVITY</span><span id="run-status">Ready to direct</span></div><div class="agents"><span>Tamil writer</span><span>Script editor</span><span>Video generation</span><span>Sound & colour</span><span>Output review</span></div><div class="log-tools"><label>RUN<select id="log-run"></select></label><label>LEVEL<select id="log-level"><option value="all">All events</option><option value="ERROR">Errors</option><option value="WARNING">Warnings</option></select></label><label>SEARCH<input id="log-search" placeholder="Shot, stage, error…"></label><a class="upload-label" id="download-run">Download run log</a><a class="upload-label" href="/api/logs/application" download>Application log</a></div><div class="progress-status" id="production-progress" role="status"></div><div class="progress-status" id="quota-status"></div><progress id="production-bar" max="100" value="0"></progress><div id="diagnostic" class="diagnostic" hidden></div><div id="events" class="events">Your production steps will appear here as they run.</div></div>
+</section>
+<section id="script" class="page" hidden><div class="surface"><div class="eyebrow">TAMIL WRITER</div><h2>Give the next episode a spark.</h2><p>Describe the situation. The writer creates dialogue, screen positions and prop actions for a 30-second episode.</p><label>EPISODE IDEA<textarea id="idea" rows="3" placeholder="Sheru buys a bus ticket in Chennai…"></textarea></label><div class="upload-row"><button id="write" class="primary">Develop script →</button><button id="script-review" class="outline">Review Tamil & continuity</button></div><div id="script-result"></div></div></section>
+<section id="review" class="page" hidden><div class="surface"><div class="eyebrow">REVIEW ROOM</div><h2>Watch it like an audience.</h2><p>Sampled visual checks can flag errors. Play the entire clip to review the motion between those frames.</p><div id="reports"></div><fieldset id="approval"><legend>Final full-episode review</legend>
+<label><input type="checkbox">Tamil pronunciation, meaning and natural delivery</label><label><input type="checkbox">Facing direction, gaze and speech timing; lip synchronization where animated</label><label><input type="checkbox">Hands, feet and object contact; full-speed physics where motion is present</label><label><input type="checkbox">Character continuity, cinematic cuts and colour</label><label><input type="checkbox">Sound cues, dialogue balance and final 9:16 frame</label><button id="approve" class="primary">Approve current master</button></fieldset></div></section>
+<section id="growth" class="page" hidden><div class="surface">
+<div class="eyebrow">AUDIENCE DEVELOPMENT</div><h2>Find the audience for this story.</h2>
+<p>Research related current topics, draft native Tamil discovery copy, and choose measurable release experiments. A million views is the goal; results depend on the audience response.</p>
+<div class="upload-row"><button id="research-growth" class="primary">Research & develop release plan →</button><label class="upload-label">Import own-account analytics<input type="file" id="analytics-upload" accept=".csv" hidden></label></div>
+<p class="helper">CSV columns: platform, published_at, views_24h. Use youtube or instagram and an ISO publication timestamp with UTC offset. Compare the same first-24-hour outcome across your own posts.</p>
+<div id="growth-status" class="helper">Run research to see current evidence and platform-specific drafts.</div><div id="growth-warnings"></div>
+<div id="growth-editor" hidden>
+<div class="account-grid"><div><h3>YouTube Shorts</h3><label>TAMIL TITLE<input id="growth-yt-title" maxlength="100"></label><label>DESCRIPTION<textarea id="growth-yt-description" rows="4"></textarea></label><label>HASHTAGS · SEPARATE WITH SPACES<input id="growth-yt-hashtags"></label><label>KEYWORD TAGS · SEPARATE WITH COMMAS<input id="growth-yt-tags"></label></div>
+<div><h3>Instagram Reels</h3><label>TAMIL CAPTION<textarea id="growth-ig-caption" rows="6"></textarea></label><label>HASHTAGS · SEPARATE WITH SPACES<input id="growth-ig-hashtags"></label></div></div>
+<button id="save-growth" class="outline">Save publication copy</button>
+<h3>Proposed release windows</h3><div id="growth-times"></div><h3>Why these choices</h3><div id="growth-reasoning"></div>
+<h3>Research evidence</h3><div id="growth-evidence"></div></div>
+</div></section>
+<section id="connections" class="page" hidden><div class="surface"><div class="eyebrow">YOUR PRODUCTION TOOLS</div><h2>A place for every stage.</h2>
+<div class="account-grid"><div><h3>YouTube</h3><p>Choose your channel through Google authorization.</p><button class="outline" data-account="youtube">Connect YouTube</button><span id="youtube-status"></span></div><div><h3>Instagram</h3><p>Connect your professional account with your Meta app.</p><button class="outline" data-account="instagram">Connect Instagram</button><span id="instagram-status"></span></div></div>
+<h3>Video provider</h3><p class="helper">Test the video API before rendering. A successful test checks access and supported inputs. Generation sends your selected shot frame and prompt to that third-party Space. Free GPU quota is evaluated when generation starts.</p>
+<label>HUGGING FACE SPACE ID<input id="provider-space" placeholder="owner/space-name"></label>
+<label>API ENDPOINT · BLANK FOR AUTO-DETECT<input id="provider-endpoint" placeholder="/generate_video"></label>
+<label><input type="checkbox" id="provider-fallback" checked>Automatically route availability failures and quality retries across the compatible cloud model pool</label><div id="provider-catalog" class="helper"></div><label><input type="checkbox" id="provider-auth">Use my Hugging Face access token</label>
+<label>ACCESS TOKEN · SAVED IN WINDOWS CREDENTIAL MANAGER<input id="provider-token" type="password" autocomplete="off" placeholder="hf_… · leave blank to retain the saved token"></label>
+<div class="upload-row"><button id="test-provider" class="primary">Save & test provider</button><a class="upload-label" id="provider-page" target="_blank" rel="noopener noreferrer">Open selected Space</a><a class="upload-label" href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer">Hugging Face tokens</a></div>
+<div id="provider-result" class="helper"></div><div class="upload-row"><button id="refresh-quota" class="outline">Refresh live account quota</button></div><p id="live-quota" class="helper"></p>
+<h3>Release schedule</h3><p class="helper">Schedule the approved master for both accounts. Keep Studio open and the laptop awake for the uploader to run.</p>
+<div class="two"><label>EPISODE ID<input id="episode-id" placeholder="S01E001"></label><label>MANUAL TIME · OPTIONAL WITH GROWTH PLAN<input id="release-time" placeholder="2030-01-01T19:00:00+05:30"></label></div>
+<label>DIRECT HTTPS LINK TO THE APPROVED MP4<input id="release-url" placeholder="https://your-host.example/episode01.mp4"></label>
+<label><input type="checkbox" id="use-growth">Use the current growth plan's titles, captions and per-platform release times</label>
+<label><input type="checkbox" id="refresh-growth" checked>Refresh discovery copy if research is over six hours old when uploading</label>
+<p class="helper">A manual time overrides both proposed times. Automatic refresh can revise saved discovery copy, while preserving the committed release time. If a refresh fails, the uploader retains the saved copy and records the outcome.</p>
+<div class="upload-row"><button id="queue-release" class="primary">Schedule on both accounts</button><button id="start-publisher" class="outline">Start uploader</button><span id="publisher-state" class="helper"></span></div>
+<div id="release-queue"></div>
+<h3>Continuous soundtrack</h3><p class="helper">Optional ambience runs across cuts. Music is ducked under speech in the final mix.</p><div class="upload-row"><label class="upload-label">Room tone / ambience<input id="ambience-upload" type="file" accept=".wav,.mp3,.m4a" hidden></label><label class="upload-label">Music bed<input id="music-upload" type="file" accept=".wav,.mp3,.m4a" hidden></label></div><h3>Local review models</h3><p class="helper">The visual reviewer downloads separately and can be slow on your laptop. Speech transcription downloads its selected model on first use.</p>
+<div class="two"><label>TAMIL SCRIPT MODEL<input id="text_model"></label><label>VISUAL REVIEW MODEL<input id="vision_model"></label></div>
+<div class="two"><label>TAMIL TRANSCRIPTION MODEL<input id="asr_model" placeholder="small · leave blank to disable"></label><label>MAX VIDEO ATTEMPTS<select id="attempts"><option>1</option><option>2</option><option>3</option></select></label></div>
+<h3>Generation controls</h3><p class="helper">Short shots, a fixed starting seed and a focused negative prompt reduce avoidable variation. The activity report records controls the provider actually accepts.</p>
+<div class="two"><label>BASE SEED<input id="seed" type="number" min="0" max="2147483647" step="1"></label><label>VISUAL REVIEW SAMPLES<input id="review_samples" type="number" min="8" max="24" step="1"></label></div>
+<label>NEGATIVE PROMPT · SUPPORTED ENDPOINTS<textarea id="negative_prompt" rows="4"></textarea></label>
+<label>COLOUR FINISH<select id="grade"><option value="warm">Warm ivory · restrained gold</option><option value="neutral">Neutral · preserve source colour</option></select></label>
+<button id="install-vision" class="outline">Download visual reviewer</button><p class="helper">Provider access uses SHERU_SPACE, SHERU_ENDPOINT and HF_TOKEN from the Studio process environment. Queued publishing runs through UploadWorker.cmd. Connect buttons open the local account window.</p></div></section>
+</main>
+<dialog id="prompt-dialog"><div class="panel-top"><span>GENERATION CONTRACT</span><button id="close-dialog" class="quiet">Close ×</button></div><pre id="prompt-content"></pre><button id="copy-prompt" class="primary">Copy prompt</button></dialog>
+<script src="/web/studio.js"></script></body></html>
