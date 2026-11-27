@@ -103,7 +103,35 @@ class Pool:
                 connection=self.select(start)
         raise ProviderError('Compatible cloud providers are unavailable.')
 
-def open_pool(folder,ep,project,indexes,on_progress=None):return Pool(folder,ep,project,indexes,on_progress)
+class LocalPool:
+    def __init__(self,folder,ep,project,indexes,on_progress=None):
+        self.folder=folder
+        self.ep=ep
+        self.project=project
+        self.indexes=indexes
+        self.on_progress=on_progress
+        self.local_available=True
+
+    def generate(self,ep,index,folder,project,on_progress=None):
+        if self.local_available:
+            try:
+                from local_video import render
+                return render(ep,index,folder,project,on_progress)
+            except (RuntimeError,ValueError, OSError) as error:
+                self.local_available=False
+                import diagnostics
+                diagnostics.capture(error,stage='Local LTX render')
+                if on_progress:
+                    on_progress('Local render failed. Checking cloud video providers.')
+        return Pool(folder,ep,project,[index],self.on_progress).generate(
+            ep,index,folder,project,on_progress)
+
+
+def open_pool(folder,ep,project,indexes,on_progress=None):
+    from local_video import enabled
+    if enabled():
+        return LocalPool(folder,ep,project,indexes,on_progress)
+    return Pool(folder,ep,project,indexes,on_progress)
 
 
 def refresh_quota(force=False):
@@ -126,7 +154,7 @@ def refresh_quota(force=False):
     except Exception as error:
         import diagnostics
         detail=diagnostics.capture(error,stage='Live quota check')
-        live={'status':'unavailable','note':'Live quota could not be read. A fine-grained token needs Billing → Read billing usage and payment method status. Saved waits remain in force.','error_id':detail['id']}
+        live={'status':'unavailable','note':'Live quota could not be read. A fine-grained token needs Billing  Read billing usage and payment method status. Saved waits remain in force.','error_id':detail['id']}
         with wait_lock:
             current=cooldown();current.update(live_checked_at=time.time(),quota_identity=identity,live_quota=live)
             temp=WAIT.with_suffix('.tmp');temp.write_text(json.dumps(current));temp.replace(WAIT)
@@ -142,3 +170,4 @@ def refresh_quota(force=False):
             current['wait_status']='confirmed_insufficient'
         temp=WAIT.with_suffix('.tmp');temp.write_text(json.dumps(current));temp.replace(WAIT)
     return live
+
