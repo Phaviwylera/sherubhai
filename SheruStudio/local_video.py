@@ -4,9 +4,43 @@ import os
 from pathlib import Path
 import subprocess
 
+import numpy as np
+from PIL import Image
+
 MODEL_ROOT = Path("/opt/ltx-video")
 CONFIG = MODEL_ROOT / "configs" / "sheru-t4.yaml"
 PYTHON = MODEL_ROOT / ".venv" / "bin" / "python"
+
+
+def verify_frames(video, first_frame):
+    """Reject the dark-green decoder failure seen on the T4 before dubbing it."""
+    size = (64, 112)
+    source = np.asarray(Image.open(first_frame).convert("RGB").resize(size), dtype=np.float32)
+    result = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(video), "-vf", "fps=1,scale=64:112",
+         "-frames:v", "5", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"],
+        capture_output=True, timeout=120, check=False,
+    )
+    frame_bytes = size[0] * size[1] * 3
+    if result.returncode or len(result.stdout) < frame_bytes or len(result.stdout) % frame_bytes:
+        raise RuntimeError("Local LTX output could not be decoded for validation.")
+    samples = np.frombuffer(result.stdout, dtype=np.uint8).reshape(-1, size[1], size[0], 3).astype(np.float32)
+
+    def luma(pixels):
+        return (pixels * np.array([.2126, .7152, .0722], dtype=np.float32)).sum(axis=-1).mean(axis=(-2, -1))
+
+    def green_fraction(pixels):
+        return ((pixels[..., 1] > pixels[..., 0] * 1.3) &
+                (pixels[..., 1] > pixels[..., 2] * 1.3)).mean(axis=(-2, -1))
+
+    source_luma = float(luma(source))
+    source_green = float(green_fraction(source))
+    bad = (luma(samples) < source_luma * .55) & (green_fraction(samples) > .45)
+    if source_luma > 70 and source_green < .2 and bad.mean() >= .6:
+        raise RuntimeError(
+            "Local LTX produced dark-green corrupted frames instead of the approved first frame. "
+            "The clip was rejected before dubbing; check the model decoder."
+        )
 
 
 def enabled():
@@ -62,6 +96,7 @@ def render(ep, index, folder, project, on_progress=None):
     videos = sorted(output.glob("video_output*.mp4"))
     if len(videos) != 1:
         raise RuntimeError(f"Local LTX renderer produced {len(videos)} videos. See {log}.")
+    verify_frames(videos[0], first_frame)
     # The model's native 352x640 frame is cropped slightly to exact 9:16.
     portrait = output / "portrait.mp4"
     try:
