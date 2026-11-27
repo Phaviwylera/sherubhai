@@ -1,8 +1,8 @@
 """Quota-independent illustrated/hybrid episode export. No character animation claim."""
-import asyncio,json,math,os,shutil,subprocess
+import json,shutil
 from pathlib import Path
 import numpy as np
-from finishing import run,seconds,safe_file,dub_and_finish,finish_master
+from finishing import run,seconds,safe_file,dub_and_finish,finish_master,make_voice
 
 
 def wav(path,samples,rate=48000):
@@ -31,11 +31,6 @@ def soundtrack(path,length):
     wav(path,bed*fade)
 
 
-def make_voice(shot,path):
-    import edge_tts
-    pitch='-12Hz' if shot['speaker']=='Sheru' else '+9Hz' if shot['speaker']=='tea master' else '+0Hz'
-    rate='-5%' if shot['speaker']=='Sheru' else '+4%' if shot['speaker']=='tea master' else '+0%'
-    asyncio.run(edge_tts.Communicate(shot['line'],'ta-IN-ValluvarNeural',rate=rate,pitch=pitch).save(str(path)))
 
 
 def render(ep,project,folder,on_progress=None,cached=None):

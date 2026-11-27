@@ -1,4 +1,4 @@
-"""Sheru Studio starter. Python 3.10+, FFmpeg/ffprobe; local Ollama for writing.
+"""Sheru Studio starter. Python 3.11+, FFmpeg/ffprobe; local Ollama for writing.
 python sheru_studio.py pilot episode01.json
 python sheru_studio.py write episode02.json "Sheru buys a bus ticket" --model YOUR_OLLAMA_MODEL
 python sheru_studio.py review episode01.json --model YOUR_OLLAMA_MODEL
@@ -60,17 +60,17 @@ def assemble(ep,folder,out):
         parts = []
         for i,s in enumerate(ep['shots'],1):
             clip = folder / f'{i:02}.mp4'
-            streams = json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',str(clip)]))['streams']
+            streams = json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',str(clip)],timeout=300))['streams']
             for kind in ('video','audio'):
                 stream = next((v for v in streams if v['codec_type']==kind),{})
                 if float(stream.get('duration',0)) + .045 < s['seconds']:
                     raise ValueError(f'{clip}: missing or short {kind}')
             part = f'part{i:02}.mp4'
-            subprocess.run(['ffmpeg','-v','error','-xerror','-i',str(clip),'-t',str(s['seconds']),'-map','0:v:0','-map','0:a:0','-vf','fps=25,scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,setsar=1','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-ar','48000','-ac','2',str(root/part)],check=True)
+            subprocess.run(['ffmpeg','-v','error','-xerror','-i',str(clip),'-t',str(s['seconds']),'-map','0:v:0','-map','0:a:0','-vf','fps=25,scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,setsar=1','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-ar','48000','-ac','2',str(root/part)],check=True,timeout=1800)
             parts.append("file '"+part+"'")
         (root/'order.txt').write_text('\n'.join(parts))
         result=root/'master.mp4'
-        subprocess.run(['ffmpeg','-v','error','-f','concat','-safe','1','-i',str(root/'order.txt'),'-c','copy','-movflags','+faststart',str(result)],check=True)
+        subprocess.run(['ffmpeg','-v','error','-f','concat','-safe','1','-i',str(root/'order.txt'),'-c','copy','-movflags','+faststart',str(result)],check=True,timeout=1800)
         result.rename(out)
 
 def main():

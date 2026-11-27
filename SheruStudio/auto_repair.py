@@ -1,5 +1,5 @@
 """Bounded autonomous audio repair and evidence-based visual regeneration."""
-import copy,json,re,unicodedata
+import copy,re,unicodedata
 from pathlib import Path
 
 class QualityRetry(ValueError):

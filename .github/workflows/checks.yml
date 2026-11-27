@@ -1,0 +1,41 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: pip install pytest pyflakes flask pillow
+      - name: Tests
+        run: python -m pytest -q
+      - name: Lint Python
+        run: python -m pyflakes SheruStudio
+      - name: Check the web client
+        run: node --check SheruStudio/web/studio.js
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem SheruStudio -Filter *.ps1 | ForEach-Object {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors.Count) {
+              Write-Host "$($_.Name): $($errors[0].Message)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
+      - name: Installer scripts must stay ASCII for Windows PowerShell 5.1
+        run: |
+          if LC_ALL=C grep -nP '[^\x00-\x7F]' SheruStudio/*.ps1 SheruStudio/*.cmd; then
+            echo "Non-ASCII characters found in a PowerShell or command script."
+            exit 1
+          fi

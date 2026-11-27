@@ -10,7 +10,7 @@ import urllib.request
 import uuid
 
 ROOT=Path(__file__).resolve().parent
-CONFIG=ROOT/'video-provider.json'
+CONFIG=Path(os.getenv('SHERU_CONFIG') or ROOT/'video-provider.json')
 DEFAULT_SPACE='zerogpu-aoti/wan2-2-fp8da-aoti-faster'
 OLD_SPACE='Wan-AI/Wan-2.2-5B'
 TOKEN_KEY='huggingface-video'
@@ -201,8 +201,9 @@ def open_provider(folder,data=None):
         report['native_output']='Portrait output is 480×832. Final export centre-crops approximately 2.5% of its width to 9:16.'
     current=config()
     if all(current.get(key)==data.get(key) for key in ('space','endpoint','use_auth')):
-        data['last_check']=report
-        write_config(data)
+        # Merge instead of replacing: auto_fallback must survive an availability check.
+        current['last_check']=report
+        write_config(current)
     return client,name,params,report
 
 def preflight_episode(ep,project,connection,indexes):
@@ -221,11 +222,15 @@ def preflight_episode(ep,project,connection,indexes):
     if missing:
         raise ProviderError('Approved first-frame images are missing for shot(s) '+', '.join(missing)+'. Select each shot and use Sound & first frame → First frame. The character portrait defines identity; each shot frame must also establish its setting and positions.')
 
+MAX_JOB_WAIT=4*3600
+
 def submit(client,endpoint,args,on_progress=None):
     try:
         job=client.submit(api_name=endpoint,**args)
         started=time.monotonic();last=None;tick=0
         while not job.done():
+            if time.monotonic()-started>MAX_JOB_WAIT:
+                raise ProviderError('The provider job stayed queued for over four hours. Retained clips are unaffected; submit again or choose another compatible Space.',reason='unavailable')
             status=job.status()
             code=getattr(status,'code','Waiting')
             label=getattr(code,'value',str(code))

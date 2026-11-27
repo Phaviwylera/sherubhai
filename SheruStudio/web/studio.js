@@ -151,15 +151,29 @@ function activity(){
   row.textContent=release.episode+' · '+release.platform+' · '+release.state+' · '+new Date(release.due*1000).toLocaleString()+(release.remote?' · '+release.remote:'')+(release.growth?' · Growth plan':'')+(release.refresh_status?' · '+release.refresh_status:'');
   const details=document.createElement('details'),summary=document.createElement('summary');
   summary.textContent='Publication copy';details.append(summary);formatted(details,release.publication_copy||{});
-  if(release.diagnostic?.id){const failure=document.createElement('details'),label=document.createElement('summary');label.textContent='Upload error '+release.diagnostic.id;failure.append(label);formatted(failure,release.diagnostic);$('release-queue').append(failure);}
-  $('release-queue').append(row,details);
+  $('release-queue').append(row);
+  if(release.diagnostic?.id){
+   const failure=document.createElement('details'),label=document.createElement('summary');
+   label.textContent='Upload error '+release.diagnostic.id+' — '+release.diagnostic.summary;
+   failure.append(label);formatted(failure,release.diagnostic);$('release-queue').append(failure);
+  }
+  $('release-queue').append(details);
+  if(['failed','check'].includes(release.state)){
+   const actions=document.createElement('div');actions.className='upload-row';
+   for(const [action,text] of [['retry','Retry upload'],['submitted','Mark published']]){
+    const button=document.createElement('button');button.className='outline';button.textContent=text;
+    button.onclick=()=>execute(async()=>{await api('/api/release/resolve',{episode:release.episode,platform:release.platform,action});await refresh();});
+    actions.append(button);
+   }
+   $('release-queue').append(actions);
+  }
  }
 }
 async function refresh(){
  const next=await api('/api/state');
  const active=next.runs.some(run=>['queued','running'].includes(run.state));
  // Keep video playback and open report details intact until run content changes.
- const reportChanged=JSON.stringify(state?.runs)!==JSON.stringify(next.runs);
+ const reportChanged=JSON.stringify(state?.runs?.map(run=>[run.id,run.state,run.revision,run.output]))!==JSON.stringify(next.runs.map(run=>[run.id,run.state,run.revision,run.output]));
  state=next;
  if(!doc||(!dirty&&displayRevision!==state.revision)){
   doc=structuredClone(state.document);displayRevision=state.revision;
@@ -224,8 +238,12 @@ $('approve').onclick=()=>execute(async()=>{
  await api('/api/approve',{run:approvalRun,checks:[...document.querySelectorAll('#approval input')].map(box=>box.checked)});
  await refresh();tell('Master approved for export. Publishing still uses the connected-account release queue.');
 });
-execute(refresh);
-setInterval(()=>refresh().catch(error=>tell(error.message)),3000);
+async function tick(){
+ try{await refresh();}catch(error){tell(error.message);}
+ const active=state?.runs?.some(run=>['queued','running'].includes(run.state));
+ setTimeout(tick,active?3000:15000);
+}
+tick();
 
 $('queue-release').onclick=()=>execute(async()=>{
  if(dirty)throw new Error('Save changes, render and approve the current master before scheduling.');

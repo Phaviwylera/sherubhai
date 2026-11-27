@@ -42,5 +42,15 @@ if ($installRoot.TrimEnd('\') -ine $sourceFolder.TrimEnd('\')) {
     }
 }
 @{root=$installRoot} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $sourceFolder 'install-location.json') -Encoding UTF8
+# The update replaced requirements.txt, so the environment must be brought up to date
+# before the new files are imported. Without this an added dependency fails mid-render.
+$venvPython = Join-Path $installRoot '.venv\Scripts\python.exe'
+$logDir = Join-Path $installRoot 'logs'
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+Write-Host 'Updating application packages ...' -ForegroundColor Cyan
+& $venvPython (Join-Path $installRoot 'setup_progress.py') run --label 'Updating application packages' --status (Join-Path $logDir 'setup-detail.json') -- $venvPython -m pip install --progress-bar off --timeout 30 --retries 3 -r (Join-Path $installRoot 'requirements.txt')
+if ($LASTEXITCODE) { throw 'Application package update failed. Completed downloads are kept; rerun Repair.cmd to retry.' }
+& $venvPython (Join-Path $installRoot 'production.py') doctor
+if ($LASTEXITCODE) { throw 'Health check failed after the package update. Rerun Repair.cmd to retry.' }
 Write-Host 'Application update complete. Opening Studio ...' -ForegroundColor Green
 & (Join-Path $installRoot 'launch.ps1') -Action studio

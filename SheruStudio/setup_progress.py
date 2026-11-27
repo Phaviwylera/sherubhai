@@ -1,6 +1,5 @@
 """Dependency-free setup progress, verified downloads, extraction and process heartbeats."""
 import argparse
-from contextlib import contextmanager
 import hashlib
 import http.client
 import json
