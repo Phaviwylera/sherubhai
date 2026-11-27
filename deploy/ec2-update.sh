@@ -30,6 +30,9 @@ chown -R ubuntu:ubuntu "$repo/SheruStudio/studio-data" "$repo/SheruStudio/logs" 
 python3 -m venv "$repo/.venv"
 "$repo/.venv/bin/pip" install --disable-pip-version-check -q -r "$repo/SheruStudio/requirements.txt"
 python3 -m compileall -q "$repo/SheruStudio"
+if [[ -f /opt/ltx-video/ltx_video/inference.py ]]; then
+  python3 "$repo/deploy/patch-ltx-t4.py"
+fi
 
 health() {
   systemctl is-active --quiet sheru-studio.service &&

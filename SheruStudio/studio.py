@@ -751,6 +751,9 @@ def approve():
                 raise ValueError('Approve a current full-episode preview.')
             output=json.loads(row['output'])
             if not output.get('master'): raise ValueError('Render the full episode before approval.')
+            if any(entry.get('attempts') and entry['attempts'][-1].get('report',{}).get('status')=='fail'
+                   for entry in output.get('shots',[])):
+                raise ValueError('This episode contains failed shots. Regenerate and recheck them before approval.')
             output['approval']={'checks':checks,'at':time.time()}
             connection.execute("UPDATE runs SET state='approved',output=? WHERE id=?",(json.dumps(output,ensure_ascii=False),row['id']))
     return jsonify(ok=True)
