@@ -41,6 +41,19 @@ def verify_frames(video, first_frame):
             "Local LTX produced dark-green corrupted frames instead of the approved first frame. "
             "The clip was rejected before dubbing; check the model decoder."
         )
+    first = samples[0].reshape(-1)
+    centered = first - first.mean()
+    similarity = []
+    for frame in samples[1:]:
+        candidate = frame.reshape(-1)
+        candidate = candidate - candidate.mean()
+        denominator = np.linalg.norm(centered) * np.linalg.norm(candidate)
+        similarity.append(float(np.dot(centered, candidate) / denominator) if denominator else 0.0)
+    if len(similarity) >= 3 and sum(score < .4 for score in similarity) >= 3:
+        raise RuntimeError(
+            "Local LTX changed the fixed-camera composition after the approved first frame. "
+            "The clip was rejected before dubbing."
+        )
 
 
 def enabled():
@@ -52,9 +65,25 @@ def enabled():
     )
 
 
+def local_prompt(ep, index):
+    """Keep the central action inside the LTX text encoder's short context."""
+    shot = ep["shots"][index]
+    def words(value, limit):
+        return " ".join(str(value).split()[:limit])
+
+    return " ".join((
+        "One continuous cinematic video shot at a Chennai tea stall.",
+        "Sheru is a mature lion-headed man with a gold mane in an ivory suit.",
+        words(shot["action"], 38),
+        words(shot["blocking"], 14),
+        words(shot["camera"], 12),
+        "Keep the approved first-frame identities, composition, lighting and camera direction.",
+    ))
+
+
 def render(ep, index, folder, project, on_progress=None):
     from finishing import safe_file
-    from quality import preflight, render_prompt
+    from quality import preflight
 
     preflight(ep)
     shot = ep["shots"][index]
@@ -81,7 +110,7 @@ def render(ep, index, folder, project, on_progress=None):
     with log.open("w", encoding="utf8") as stream:
         try:
             result = subprocess.run(
-                [str(PYTHON), "-c", code, render_prompt(ep, index), str(output),
+                [str(PYTHON), "-c", code, local_prompt(ep, index), str(output),
                  str(CONFIG), str(frames), str(first_frame)],
                 cwd=MODEL_ROOT, env=environment, stdout=stream,
                 stderr=subprocess.STDOUT, check=False, timeout=3600,
