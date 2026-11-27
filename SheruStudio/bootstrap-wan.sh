@@ -42,6 +42,28 @@ if original in source:
 else:
     assert fallback in source, 'Wan attention import changed; review upstream before running'
 PY
+# Keep completed temporal chunks in host memory so five-second decoding fits A10G.
+"$PYTHON" - "$SOURCE/wan/modules/vae2_2.py" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+first = '''                    first_chunk=True,
+                )
+            else:
+                out_ = self.decoder('''
+first_offloaded = first.replace('                )', '                ).cpu()', 1)
+following = '''                    feat_idx=self._conv_idx,
+                )
+                out = torch.cat([out, out_], 2)
+        out = unpatchify(out, patch_size=2)'''
+following_offloaded = following.replace('                )', '                ).cpu()', 1)
+if first in s and following in s:
+    p.write_text(s.replace(first, first_offloaded, 1).replace(
+        following, following_offloaded, 1))
+else:
+    assert first_offloaded in s and following_offloaded in s, 'Wan VAE changed; review upstream before running'
+PY
 if [[ ! -f "$MODEL/.sheru-ready" ]]; then
     "$PYTHON" - "$MODEL" "$MODEL_REVISION" <<'PY'
 import sys
