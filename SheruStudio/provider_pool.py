@@ -1,5 +1,5 @@
 """Compatible cloud routing. Shared quotas are never multiplied by routing."""
-import time,json,threading
+import os,time,json,threading
 from pathlib import Path
 from provider import config,open_provider,ProviderError,preflight_episode
 CATALOG=[
@@ -8,7 +8,7 @@ CATALOG=[
  {'space':'Lightricks/LTX-Video-distilled','endpoint':'/image_to_video','label':'LTX Video distilled official','model':'LTX Video distilled'},
 ]
 
-WAIT=Path(__file__).resolve().parent/'provider-wait.json'
+WAIT=Path(os.getenv('SHERU_WAIT') or Path(__file__).resolve().parent/'provider-wait.json')
 wait_lock=threading.RLock()
 def cooldown():
     with wait_lock:
@@ -154,20 +154,24 @@ def refresh_quota(force=False):
     except Exception as error:
         import diagnostics
         detail=diagnostics.capture(error,stage='Live quota check')
-        live={'status':'unavailable','note':'Live quota could not be read. A fine-grained token needs Billing  Read billing usage and payment method status. Saved waits remain in force.','error_id':detail['id']}
+        live={'status':'unavailable','note':'Live quota could not be read. A fine-grained token needs Billing · Read billing usage and payment method status. Saved waits remain in force.','error_id':detail['id']}
         with wait_lock:
             current=cooldown();current.update(live_checked_at=time.time(),quota_identity=identity,live_quota=live)
             temp=WAIT.with_suffix('.tmp');temp.write_text(json.dumps(current));temp.replace(WAIT)
         return live
     with wait_lock:
-        current=cooldown();needed=float(current.get('quota',{}).get('requested_gpu_seconds') or 1)
+        current=cooldown();requested=current.get('quota',{}).get('requested_gpu_seconds')
         current.update(live_checked_at=time.time(),quota_identity=identity,live_quota=live)
-        if remaining>=needed and current.get('quota',{}).get('requested_gpu_seconds'):
-            current['until']=0
-            current['wait_status']='cleared_by_live_allowance'
-        elif until:
-            current['until']=until
-            current['wait_status']='confirmed_insufficient'
+        if requested is not None:
+            if remaining>=requested:
+                current['until']=0
+                current['wait_status']='cleared_by_live_allowance'
+            elif until:
+                current['until']=until
+                current['wait_status']='confirmed_insufficient'
+        elif current.get('until',0)<=time.time():
+            # Without a saved request size, a live reading alone must not create a new wait.
+            current['wait_status']='live_allowance_available'
         temp=WAIT.with_suffix('.tmp');temp.write_text(json.dumps(current));temp.replace(WAIT)
     return live
 

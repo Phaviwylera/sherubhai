@@ -1,6 +1,5 @@
 """Evidence-backed discovery and publishing plans. No reach forecasts."""
 import csv
-import hashlib
 import io
 import json
 import math
@@ -8,7 +7,6 @@ import re
 from collections import Counter,defaultdict
 from datetime import datetime,timedelta,timezone
 from statistics import median
-from urllib.parse import urlencode
 import xml.etree.ElementTree as ET
 
 IST=timezone(timedelta(hours=5,minutes=30))

@@ -20,7 +20,10 @@ def image_payload(images):
 
 def asr_audio(clip):
     import numpy as np
-    result=subprocess.run(['ffmpeg','-v','error','-i',str(clip),'-vn','-ac','1','-ar','16000','-f','f32le','pipe:1'],capture_output=True)
+    try:
+        result=subprocess.run(['ffmpeg','-v','error','-i',str(clip),'-vn','-ac','1','-ar','16000','-f','f32le','pipe:1'],capture_output=True,timeout=600)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError('ASR audio decoding did not finish within ten minutes.') from None
     if result.returncode:raise RuntimeError('ASR audio decoding failed: '+result.stderr.decode(errors='replace')[-1200:])
     audio=np.frombuffer(result.stdout,dtype='<f4').copy()
     if audio.size==0:raise ValueError('ASR audio decoding returned no samples.')

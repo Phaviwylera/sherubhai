@@ -12,8 +12,8 @@ import traceback
 import uuid
 
 ROOT=Path(__file__).resolve().parent
-LOGS=ROOT/'logs'
-LOGS.mkdir(exist_ok=True)
+LOGS=Path(os.getenv('SHERU_LOGS') or ROOT/'logs')
+LOGS.mkdir(parents=True,exist_ok=True)
 context=contextvars.ContextVar('studio_diagnostics',default={})
 write_lock=threading.Lock()
 logger=logging.getLogger('sheru.studio')

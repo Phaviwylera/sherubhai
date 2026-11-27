@@ -1,8 +1,8 @@
 """Persistent, bounded production retries; never fabricates review approval."""
-import json,threading,time
+import json,os,threading,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
-PATH=ROOT/'studio-data'/'automation.json'
+PATH=Path(os.getenv('SHERU_DATA') or ROOT/'studio-data')/'automation.json'
 lock=threading.RLock()
 DEFAULT={'enabled':False,'state':'idle','run':None,'retry_at':None,'retry_count':0,'max_retries':8,'message':'Start automatic production to render the current episode and prepare its growth plan.'}
 

@@ -1,0 +1,29 @@
+# Installation state, generated media, credentials and caches.
+# These live next to the application at runtime and must never be committed.
+SheruStudio/studio-data/
+SheruStudio/logs/
+SheruStudio/exports/
+SheruStudio/downloads/
+SheruStudio/temp/
+SheruStudio/tools/
+SheruStudio/models/
+SheruStudio/cache/
+SheruStudio/.venv/
+SheruStudio/install-location.json
+SheruStudio/studio-port.txt
+SheruStudio/model-port.txt
+SheruStudio/video-provider.json
+SheruStudio/provider-wait.json
+SheruStudio/releases.sqlite
+SheruStudio/releases.sqlite-journal
+SheruStudio/releases.sqlite-wal
+SheruStudio/analytics.csv
+SheruStudio/youtube-client.json
+SheruStudio/youtube-token.json
+install-location.json
+
+# Python and test tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/

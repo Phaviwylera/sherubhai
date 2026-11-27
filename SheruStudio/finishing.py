@@ -1,6 +1,5 @@
 """Shot generation, measurable media checks, model-assisted review and finishing."""
 import asyncio
-import base64
 import difflib
 import json
 import math
@@ -10,10 +9,15 @@ import subprocess
 from pathlib import Path
 import urllib.request
 import urllib.error
-from direction import IDENTITY, prompt
+from direction import IDENTITY
 
-def run(args):
-    result=subprocess.run(args,capture_output=True,text=True)
+def run(args,timeout=1800):
+    try:
+        result=subprocess.run(args,capture_output=True,text=True,errors='replace',timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        import diagnostics
+        diagnostics.record('ERROR','Media command timed out.',command=args,timeout_seconds=timeout)
+        raise RuntimeError(f'Media operation did not finish within {timeout} seconds.') from error
     if result.returncode:
         import diagnostics
         diagnostics.record('ERROR','Media command failed.',command=args,exit_code=result.returncode,stderr=result.stderr[-24000:])
@@ -79,7 +83,6 @@ def technical(clip,expected):
     return dict(status='fail' if problems else 'pass',problems=problems,warnings=warnings)
 
 def tamil_review(clip,shot,settings,model_name=None):
-    import difflib
     from auto_repair import tamil_text,missing_numbers
     name=model_name or settings.get('asr_model')
     if not name:return {'verdict':'uncertain','note':'Tamil ASR is disabled.'}

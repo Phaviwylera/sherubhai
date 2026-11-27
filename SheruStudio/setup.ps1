@@ -178,7 +178,12 @@ Set-Stage 4 'Downloading/checking and extracting Ollama'
 $ollama = Join-Path $installRoot 'tools\ollama\ollama.exe'
 if (!(Test-Path -LiteralPath $ollama) -or (Test-Path -LiteralPath (Join-Path $installRoot 'tools\ollama\.sheru-installing'))) {
     $archive = Join-Path $downloads 'ollama-windows-amd64.zip'
-    Download-File 'https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip' $archive
+    $hashFile = Join-Path $downloads 'ollama-windows-amd64.sha256'
+    # The release publishes sha256sum.txt; verify the archive instead of trusting the download.
+    Download-File 'https://github.com/ollama/ollama/releases/latest/download/sha256sum.txt' $hashFile -Refresh
+    $ollamaHash = [regex]::Match([string](Get-Content -Raw -LiteralPath $hashFile),'(?im)^([a-f0-9]{64})\s+\*?.*ollama-windows-amd64\.zip\s*$').Groups[1].Value
+    if (!$ollamaHash) { throw 'Ollama publisher returned an unreadable checksum.' }
+    Download-File 'https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip' $archive $ollamaHash
     $ollamaStage = Join-Path $installRoot ('temp\ollama-'+[guid]::NewGuid().ToString('N'))
     Expand-Visible $archive $ollamaStage
     New-Item -ItemType Directory -Path (Join-Path $installRoot 'tools\ollama') -Force | Out-Null

@@ -5,8 +5,14 @@ Then click Render episode / Start automatic production. Failed current-revision
 clips are recovered automatically. Tamil mismatch triggers local speech repair;
 visual mismatch triggers corrected motion generation. The worker queues retries.
 
-First installation: run START-FRESH.cmd and choose the D-drive folder.
+First installation: run START-FRESH.cmd and choose a folder you can write to.
 It starts the animated pipeline automatically. Cloud access/quota are required.
 It does not replace the requested animation with still scenes.
 
 Read README-FIRST.txt for steps and the visible retry limits.
+
+Repair.cmd now also updates the Python packages and runs the health check
+before reopening Studio, so a release that adds a package installs cleanly.
+
+Developers: see README.md in the package root for source setup, tests, data
+locations, configuration variables and the release queue commands.
