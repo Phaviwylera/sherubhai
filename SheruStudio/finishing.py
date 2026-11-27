@@ -33,7 +33,7 @@ def seconds(path):
 def model_json(model,instruction,images=None):
     host=os.getenv('OLLAMA_HOST','127.0.0.1:11434')
     if not host.startswith(('http://','https://')): host='http://'+host
-    body=dict(model=model,prompt=instruction,stream=False,format='json',keep_alive=0,options={'temperature':0.15})
+    body=dict(model=model,prompt=instruction,stream=False,format='json',keep_alive=0,options={'temperature':0.15,'num_ctx':8192 if images else 4096})
     if images:
         from reviewer_compat import image_payload
         payload,note=image_payload(images)
