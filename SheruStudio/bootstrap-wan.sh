@@ -29,6 +29,19 @@ if ! "$PYTHON" -c 'import cv2,accelerate,easydict,ftfy,dashscope,decord; import 
 fi
 # Wan's package initializer imports optional speech models. Only TI2V is installed here.
 printf '%s\n' 'from . import configs, distributed, modules' 'from .textimage2video import WanTI2V' > "$SOURCE/wan/__init__.py"
+# Wan's model calls FlashAttention directly, bypassing its own SDPA fallback.
+"$PYTHON" - "$SOURCE/wan/modules/model.py" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+source = p.read_text()
+original = 'from .attention import flash_attention'
+fallback = 'from .attention import attention as flash_attention'
+if original in source:
+    p.write_text(source.replace(original, fallback, 1))
+else:
+    assert fallback in source, 'Wan attention import changed; review upstream before running'
+PY
 if [[ ! -f "$MODEL/.sheru-ready" ]]; then
     "$PYTHON" - "$MODEL" "$MODEL_REVISION" <<'PY'
 import sys
