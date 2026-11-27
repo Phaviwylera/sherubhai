@@ -1,5 +1,6 @@
 """Shot generation, measurable media checks, model-assisted review and finishing."""
 import asyncio
+import base64
 import difflib
 import json
 import math
@@ -9,15 +10,10 @@ import subprocess
 from pathlib import Path
 import urllib.request
 import urllib.error
-from direction import IDENTITY
+from direction import IDENTITY, prompt
 
-def run(args,timeout=1800):
-    try:
-        result=subprocess.run(args,capture_output=True,text=True,errors='replace',timeout=timeout)
-    except subprocess.TimeoutExpired as error:
-        import diagnostics
-        diagnostics.record('ERROR','Media command timed out.',command=args,timeout_seconds=timeout)
-        raise RuntimeError(f'Media operation did not finish within {timeout} seconds.') from error
+def run(args):
+    result=subprocess.run(args,capture_output=True,text=True)
     if result.returncode:
         import diagnostics
         diagnostics.record('ERROR','Media command failed.',command=args,exit_code=result.returncode,stderr=result.stderr[-24000:])
@@ -33,7 +29,8 @@ def seconds(path):
 def model_json(model,instruction,images=None):
     host=os.getenv('OLLAMA_HOST','127.0.0.1:11434')
     if not host.startswith(('http://','https://')): host='http://'+host
-    body=dict(model=model,prompt=instruction,stream=False,format='json',keep_alive=0,options={'temperature':0.15,'num_ctx':8192 if images else 4096})
+    body=dict(model=model,prompt=instruction,stream=False,format='json',keep_alive=0,
+              options={'temperature':0.15,'num_ctx':8192 if images else 4096})
     if images:
         from reviewer_compat import image_payload
         payload,note=image_payload(images)
@@ -83,6 +80,7 @@ def technical(clip,expected):
     return dict(status='fail' if problems else 'pass',problems=problems,warnings=warnings)
 
 def tamil_review(clip,shot,settings,model_name=None):
+    import difflib
     from auto_repair import tamil_text,missing_numbers
     name=model_name or settings.get('asr_model')
     if not name:return {'verdict':'uncertain','note':'Tamil ASR is disabled.'}
@@ -102,14 +100,41 @@ def tamil_review(clip,shot,settings,model_name=None):
         detail=diagnostics.capture(error,reviewer='Tamil ASR')
         return {'verdict':'uncertain','model':name,'note':'Tamil recognition unavailable: '+detail['message'],'error_id':detail['id']}
 
+class IdentityRejected(Exception):
+    """The midpoint no longer shows the approved character."""
+
+
 def review(clip,shot,settings,reference,folder):
     report={'technical':technical(clip,shot['seconds'])}
+    if shot.get('first_frame'):
+        from local_video import verify_frames
+        approved=safe_file(folder.parent.parent.parent,shot['first_frame'])
+        try:
+            verify_frames(clip,approved)
+        except RuntimeError as error:
+            report['technical']['status']='fail'
+            report['technical']['problems'].append(str(error))
     from quality import controls,CATEGORIES,visual_result,unknown_visual
     samples=controls(settings)['review_samples']
     images=extract_frames(clip,folder/'frames',samples)
     vision=settings.get('vision_model')
     if vision:
         try:
+            if shot.get('first_frame'):
+                approved=safe_file(folder.parent.parent.parent,shot['first_frame'])
+                identity=model_json(vision,
+                    'Image 1 is the approved first frame of one continuous shot. Image 2 is its midpoint. '
+                    'Are the main characters the same visually identifiable characters? '
+                    'Reply compact JSON with same_characters (boolean) and reason (one short visible observation).',
+                    [approved,images[len(images)//2]])
+                if identity.get('same_characters') is not True:
+                    reason=str(identity.get('reason') or 'Character identity changed during the shot.')[:500]
+                    report['visual']=unknown_visual('Midpoint identity mismatch: '+reason)
+                    report['visual']['checks']['identity']={'verdict':'fail','evidence':reason}
+                    report['visual']['verdict']='fail'
+                    report['visual']['sample_times']=[0,round(shot['seconds']/2,3)]
+                    report['visual']['input_format']='Approved first frame and midpoint.'
+                    raise IdentityRejected()
             timeline=[round(min(shot['seconds']-.05,shot['seconds']*i/(samples-1)),3) for i in range(samples)]
             result=model_json(vision,
                 "You are reviewing sampled frames, not a physics simulation. The FIRST image is the identity reference. "
@@ -126,6 +151,8 @@ def review(clip,shot,settings,reference,folder):
             report['visual']=visual_result(result)
             report['visual']['sample_times']=timeline
             report['visual']['input_format']='Single numbered contact sheet; details may be reduced. Not full-motion analysis.'
+        except IdentityRejected:
+            pass
         except Exception as error:
             import diagnostics
             diagnostics.capture(error,reviewer='visual')
