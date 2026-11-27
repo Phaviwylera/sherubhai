@@ -429,6 +429,8 @@ def retry_run(rid):
         doc,revision=document(PID)
         if revision!=run['revision']:raise ValueError('The script has changed. Start a new render so older clips cannot be mixed with a changed contract.')
         retry_at=run['output'].get('retry_not_before',0)
+        from local_wan import enabled as local_wan_ready
+        if local_wan_ready():retry_at=0
         if retry_at>time.time() and run['output'].get('retry_reason')=='quota':
             from provider_pool import refresh_quota,cooldown
             refresh_quota()
@@ -902,12 +904,16 @@ def automation_loop():
                 if row and row['state']=='interrupted':
                     automation.save(state='waiting',retry_at=time.time()+60,message='Studio restarted. Resuming the interrupted episode from its completed-shot checkpoints.')
             if data['enabled'] and data['state']=='waiting':
-                from provider_pool import cooldown,refresh_quota
-                waiting=cooldown()
-                if waiting.get('until',0)>time.time():
-                    live=refresh_quota()
-                    if live.get('status')=='checked' and cooldown().get('wait_status')=='cleared_by_live_allowance':
-                        automation.save(retry_at=time.time(),message='Live account allowance is available. Resuming retained production.')
+                from local_wan import enabled as local_wan_ready
+                if local_wan_ready():
+                    automation.save(retry_at=time.time(),message='Local Wan is ready. Resuming retained production.')
+                else:
+                    from provider_pool import cooldown,refresh_quota
+                    waiting=cooldown()
+                    if waiting.get('until',0)>time.time():
+                        live=refresh_quota()
+                        if live.get('status')=='checked' and cooldown().get('wait_status')=='cleared_by_live_allowance':
+                            automation.save(retry_at=time.time(),message='Live account allowance is available. Resuming retained production.')
             if automation.due(automation.state()):
                 data=automation.state()
                 with mutation:
