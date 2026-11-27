@@ -136,8 +136,8 @@ def review(clip,shot,settings,reference,folder):
     return report
 
 def generate(ep,index,folder,project,connection=None,on_progress=None):
-    from provider_pool import Pool
-    if isinstance(connection,Pool):return connection.generate(ep,index,folder,project,on_progress)
+    from provider_pool import Pool,LocalPool
+    if isinstance(connection,(Pool,LocalPool)):return connection.generate(ep,index,folder,project,on_progress)
     return _generate_single(ep,index,folder,project,connection,on_progress)
 
 def _generate_single(ep,index,folder,project,connection=None,on_progress=None):
@@ -277,3 +277,4 @@ def review_cut(previous,current,previous_shot,current_shot,settings,reference,fo
         import diagnostics
         diagnostics.capture(error,reviewer='cut continuity')
         return {'verdict':'uncertain','evidence':'Cut reviewer unavailable or incomplete: '+type(error).__name__}
+
