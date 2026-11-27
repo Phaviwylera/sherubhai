@@ -1,0 +1,16 @@
+[Unit]
+Description=Restore Sheru Studio Wan 2.2 model after EC2 boot
+Wants=network-online.target
+After=network-online.target sheru-nvme-swap.service
+RequiresMountsFor=/opt/dlami/nvme
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/sheru-studio/SheruStudio/bootstrap-wan.sh
+TimeoutStartSec=3600
+Restart=on-failure
+RestartSec=60
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
