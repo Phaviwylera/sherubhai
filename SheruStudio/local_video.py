@@ -45,12 +45,15 @@ def render(ep, index, folder, project, on_progress=None):
     environment = dict(os.environ, HF_HOME="/opt/dlami/nvme/sheru-hf-cache")
     log = output / "inference.log"
     with log.open("w", encoding="utf8") as stream:
-        result = subprocess.run(
-            [str(PYTHON), "-c", code, render_prompt(ep, index), str(output),
-             str(CONFIG), str(frames), str(first_frame)],
-            cwd=MODEL_ROOT, env=environment, stdout=stream,
-            stderr=subprocess.STDOUT, check=False,
-        )
+        try:
+            result = subprocess.run(
+                [str(PYTHON), "-c", code, render_prompt(ep, index), str(output),
+                 str(CONFIG), str(frames), str(first_frame)],
+                cwd=MODEL_ROOT, env=environment, stdout=stream,
+                stderr=subprocess.STDOUT, check=False, timeout=3600,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(f"Local LTX render timed out. See {log}.") from error
     if result.returncode:
         raise RuntimeError(
             f"Local LTX render failed with exit code {result.returncode}. "
@@ -61,11 +64,14 @@ def render(ep, index, folder, project, on_progress=None):
         raise RuntimeError(f"Local LTX renderer produced {len(videos)} videos. See {log}.")
     # The model's native 352x640 frame is cropped slightly to exact 9:16.
     portrait = output / "portrait.mp4"
-    subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", str(videos[0]), "-vf",
-         "crop=352:626", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-         "-y", str(portrait)],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", str(videos[0]), "-vf",
+             "crop=352:626", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+             "-y", str(portrait)],
+            check=True, timeout=120,
+        )
+    except (subprocess.SubprocessError, OSError) as error:
+        raise RuntimeError("Local LTX portrait conversion failed.") from error
     return portrait
 
