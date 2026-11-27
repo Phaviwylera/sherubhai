@@ -1,5 +1,6 @@
 """Local production studio. Run through Studio.cmd after setup."""
 import concurrent.futures
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,12 +18,12 @@ from werkzeug.exceptions import HTTPException
 import diagnostics
 from PIL import Image
 from direction import check, enrich, prompt, writer_prompt
-from finishing import model_json, review, generate, dub_and_finish, make_voice
+from finishing import model_json, review, generate, dub_and_finish, make_voice, safe_file
 from sheru_studio import assemble
 
 ROOT=Path(__file__).resolve().parent
-DATA=ROOT/'studio-data'
-DATA.mkdir(exist_ok=True)
+DATA=Path(os.getenv('SHERU_DATA') or ROOT/'studio-data')
+DATA.mkdir(parents=True,exist_ok=True)
 # Hold an operating-system lock for the lifetime of this Studio process.
 # A second launch opens the existing UI before it can alter job state.
 studio_lock=(DATA/'.studio.lock').open('a+b')
@@ -60,6 +61,7 @@ with connect() as connection:
     CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, project TEXT, revision INTEGER, kind TEXT, state TEXT, output TEXT);
     CREATE TABLE IF NOT EXISTS growth_plans(id TEXT PRIMARY KEY, project TEXT, revision INTEGER, checked REAL, snapshot TEXT, plan TEXT);
     CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, run TEXT, stage TEXT, message TEXT, at REAL);
+    CREATE INDEX IF NOT EXISTS events_run ON events(run,id);
     UPDATE runs SET state='interrupted' WHERE state IN ('queued','running');
     """)
     columns={row[1] for row in connection.execute('PRAGMA table_info(events)')}
@@ -76,10 +78,13 @@ def project_dir(pid):
     document(pid)
     return DATA/pid
 
+class Busy(ValueError):
+    """Another local task owns this episode. Automatic retries recheck on the next tick."""
+
 def idle(pid):
     with connect() as connection:
         if connection.execute("SELECT 1 FROM runs WHERE project=? AND state IN ('queued','running')",(pid,)).fetchone():
-            raise ValueError('This episode already has an active task. Wait for it to finish.')
+            raise Busy('This episode already has an active task. Wait for it to finish.')
 
 def save_doc(pid,doc,revision):
     with connect() as connection:
@@ -179,6 +184,20 @@ def too_large(error):
 def index():
     return (ROOT/'web'/'index.html').read_text(encoding='utf8').replace('__TOKEN__',TOKEN)
 
+ACCOUNT_CACHE={'at':0.0,'value':None}
+def account_status():
+    """Credential-vault reads are slow, so the UI poll reuses them briefly."""
+    if ACCOUNT_CACHE['value'] is not None and time.time()-ACCOUNT_CACHE['at']<30:return ACCOUNT_CACHE['value']
+    accounts={}
+    try:
+        from accounts import stored
+        for provider,key in [('YouTube','youtube'),('Instagram','instagram')]:
+            data=stored(key)
+            accounts[provider]='Reconnect' if data and data.get('expires',float('inf'))<=time.time() else 'Connected' if data else 'Connect'
+    except Exception: accounts={'YouTube':'Connect','Instagram':'Connect'}
+    ACCOUNT_CACHE.update(at=time.time(),value=accounts)
+    return accounts
+
 @app.get('/api/state')
 def state():
     doc,revision=document(PID)
@@ -198,15 +217,9 @@ def state():
     if growth_plan:
         growth_plan['plan']=json.loads(growth_plan['plan'])
         growth_plan['snapshot']=json.loads(growth_plan['snapshot'])
-    accounts={}
-    try:
-        from accounts import stored
-        for provider,key in [('YouTube','youtube'),('Instagram','instagram')]:
-            data=stored(key)
-            accounts[provider]='Reconnect' if data and data.get('expires',float('inf'))<=time.time() else 'Connected' if data else 'Connect'
-    except Exception: accounts={'YouTube':'Connect','Instagram':'Connect'}
-    from releases import db
-    with db() as connection:
+    accounts=account_status()
+    from releases import read_db
+    with read_db() as connection:
         queue=[dict(row) for row in connection.execute('SELECT episode,platform,title,due,state,remote,metadata,last_error FROM jobs ORDER BY due DESC LIMIT 30')]
         for release in queue:
             release['diagnostic']=json.loads(release.pop('last_error'))
@@ -227,10 +240,8 @@ def save():
         folder=project_dir(PID)
         for shot in doc['shots']:
             for name in [shot[key] for key in ('first_frame','voice','imported_clip') if shot.get(key)]+[c['file'] for c in shot['sound_cues']]:
-                from finishing import safe_file
                 safe_file(folder,name)
         for name in doc.get('mix',{}).values():
-            from finishing import safe_file
             safe_file(folder,name)
         save_doc(PID,doc,int(data['revision']))
     return jsonify(ok=True)
@@ -322,7 +333,7 @@ def task():
         if kind=='illustrated':
             import automation
             automation.save(enabled=False,state='paused',retry_at=None,message='Cloud-video retries paused while the illustrated/hybrid episode is completed.')
-        rid=start_task(kind,doc,revision,selected,str(data.get('idea',''))[:4000],automatic=(kind=='render'))
+        rid=start_task(kind,doc,revision,selected,str(data.get('idea',''))[:4000],automatic=(kind=='render' and selected is None))
     return jsonify(ok=True,run=rid)
 
 def start_task(kind,doc,revision,selected=None,idea='',automatic=False):
@@ -337,9 +348,8 @@ def start_task(kind,doc,revision,selected=None,idea='',automatic=False):
         with connect() as connection:
             prior=connection.execute("SELECT output FROM runs WHERE project=? AND revision=? AND kind='render' AND state IN ('blocked','interrupted') ORDER BY rowid DESC LIMIT 20",(PID,revision)).fetchall()
         for row in prior:
-            for entry in json.loads(row['output']).get('shots',[]):
-                if selected is not None and entry['index']!=selected:continue
-                if entry['index'] not in recovered and any(item.get('clip') for item in entry.get('attempts',[])):recovered[entry['index']]=entry
+            for index,entry in recoverable(json.loads(row['output']),selected).items():
+                recovered.setdefault(index,entry)
         if recovered:resume_data={'shots':[recovered[i] for i in sorted(recovered)],'selected':selected}
     with connect() as connection:
         connection.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)',(rid,PID,revision,kind,'queued',json.dumps(resume_data or {},ensure_ascii=False)))
@@ -349,20 +359,35 @@ def start_task(kind,doc,revision,selected=None,idea='',automatic=False):
     executor.submit(work,rid,doc,revision,kind,selected,idea,resume_data)
     return rid
 
+def newest_clip(entry):
+    """The newest attempt that produced footage; error records carry no clip."""
+    return next((attempt for attempt in reversed(entry.get('attempts') or []) if attempt.get('clip')),None)
+
+def checkpoints(output,completed=False):
+    """Entries whose newest clip is still on disk and unmodified since it was reviewed."""
+    kept={};rejected=set()
+    for entry in output.get('shots',[]) or []:
+        attempts=entry.get('attempts') or []
+        if completed and (not attempts or attempts[-1].get('report',{}).get('status') not in ('review','pass')):continue
+        newest=newest_clip(entry)
+        clip=newest.get('clip') if newest else None
+        if not clip:continue
+        try:
+            path=safe_file(project_dir(PID),clip)
+        except ValueError:
+            rejected.add(entry.get('index'));continue
+        if entry.get('clip_sha256') and hashlib.sha256(path.read_bytes()).hexdigest()!=entry['clip_sha256']:
+            rejected.add(entry.get('index'));continue
+        kept[entry.get('index')]=entry
+    return kept,rejected
+
 def resumable(run,doc):
-    completed={}
-    for entry in run.get('output',{}).get('shots',[]):
-        attempts=entry.get('attempts',[])
-        if not attempts or attempts[-1].get('report',{}).get('status') not in ('review','pass'):continue
-        clip=attempts[-1].get('clip')
-        if clip:
-            from finishing import safe_file
-            try:
-                path=safe_file(project_dir(PID),clip)
-                if entry.get('clip_sha256') and __import__('hashlib').sha256(path.read_bytes()).hexdigest()!=entry['clip_sha256']:continue
-            except ValueError:continue
-            completed[entry['index']]=entry
-    return completed
+    return checkpoints(run.get('output',{}),completed=True)[0]
+
+def recoverable(output,selected=None):
+    """Failed candidates are retained for local repair, but only while their file is intact."""
+    kept,_=checkpoints(output)
+    return {index:entry for index,entry in kept.items() if selected is None or index==selected}
 
 @app.post('/api/automation/start')
 def start_automation():
@@ -428,7 +453,7 @@ def work(rid,doc,revision,kind,selected,idea,resume_output=None):
         while not heartbeat_done.wait(20):
             with connect() as connection:
                 last=connection.execute("SELECT stage FROM events WHERE run=? AND stage!='Heartbeat' ORDER BY id DESC LIMIT 1",(rid,)).fetchone()
-            event(rid,'Heartbeat','Still running '+(last['stage'] if last else kind)+' � elapsed '+str(int(time.monotonic()-started))+'s')
+            event(rid,'Heartbeat','Still running '+(last['stage'] if last else kind)+' · elapsed '+str(int(time.monotonic()-started))+'s')
     threading.Thread(target=heartbeat,daemon=True).start()
     try:
         if kind in ('write','script_review','growth'):
@@ -439,12 +464,15 @@ def work(rid,doc,revision,kind,selected,idea,resume_output=None):
             event(rid,'Tamil writer','Writing dialogue, blocking and continuity.')
             from provider import duration_limit
             limit=duration_limit()
-            result=check(enrich(model_json(doc['settings']['text_model'],writer_prompt(idea,limit))))
+            written=model_json(doc['settings']['text_model'],writer_prompt(idea,limit))
+            if not isinstance(written,dict) or not isinstance(written.get('shots'),list):
+                raise ValueError('The script model did not return a script object with shots. Retry or choose another Tamil-capable text model.')
+            written['settings']=doc['settings']
+            result=check(enrich(written))
             if any(shot['seconds']>limit for shot in result['shots']):
                 raise ValueError(f'The writer exceeded the selected provider limit of {limit:g} seconds per shot. Rerun script writing or shorten the shot.')
             from quality import preflight
             preflight(result)
-            result['settings']=doc['settings']
             with mutation: save_doc(PID,result,revision)
             output={'message':'New script saved. Review dialogue and shot prompts before rendering.'}
         elif kind=='script_review':
@@ -468,7 +496,6 @@ def work(rid,doc,revision,kind,selected,idea,resume_output=None):
             output['missing_first_frames']=[index+1 for index,shot in enumerate(doc['shots']) if not shot.get('first_frame') and not shot.get('imported_clip')]
         elif kind=='illustrated':
             from illustrated import render as illustrated_render
-            from finishing import safe_file
             cached={}
             # Reuse only current-revision reviewed clips and their existing voices.
             with connect() as connection:
@@ -498,10 +525,10 @@ def work(rid,doc,revision,kind,selected,idea,resume_output=None):
             snapshot=json.loads((project_dir(PID)/'runs'/idea/'script.json').read_text(encoding='utf8'))
             from model_runtime import ensure
             ensure(snapshot['settings'].get('vision_model'),lambda message:event(rid,'Review model',message))
-            from finishing import safe_file,review_cut
+            from finishing import review_cut
             previous=None;previous_shot=None;checked=[]
             for entry in saved.get('shots',[]):
-                latest=next((attempt for attempt in reversed(entry['attempts']) if attempt.get('clip')),None)
+                latest=newest_clip(entry)
                 if not latest:continue
                 index=entry['index'];shot=snapshot['shots'][index]
                 diagnostics.set_context(shot=index+1)
@@ -529,12 +556,17 @@ def work(rid,doc,revision,kind,selected,idea,resume_output=None):
             output={'message':'Discovery plan ready. Evidence, metadata and proposed release times are visible in Growth research.','plan':plan,'warnings':snapshot['warnings']}
         elif kind=='visual_model':
             event(rid,'Visual reviewer','Downloading the local visual review model. This uses several GB on the chosen drive.')
-            result=subprocess.run(['ollama','pull',doc['settings']['vision_model']],capture_output=True)
+            try:
+                result=subprocess.run(['ollama','pull',doc['settings']['vision_model']],capture_output=True,text=True,errors='replace',timeout=7200)
+            except subprocess.TimeoutExpired:
+                raise ValueError('The visual model download did not finish within two hours. Check internet access and retry.') from None
             if result.returncode: raise ValueError('Visual model download failed. Check internet access and retry.')
             output={'message':'Visual model is installed.'}
         else:
-            pending={entry['index']:entry for entry in output.get('shots',[]) if entry.get('attempts') and entry['attempts'][-1].get('clip')} if resume_output else {}
-            kept=resumable({'output':output},doc) if resume_output else {}
+            pending,stale=checkpoints(output) if resume_output else ({},set())
+            kept,_=checkpoints(output,completed=True) if resume_output else ({},set())
+            for index in sorted(stale-set(kept)):
+                event(rid,'Checkpoint',f'Shot {index+1}: retained footage is missing or was modified after review, so it is regenerated rather than reused.','WARNING')
             output={'shots':[kept[i] for i in sorted(kept)],'selected':selected}
             update_run(rid,'running',output)
             indexes=range(len(doc['shots'])) if selected is None else [selected]
@@ -555,7 +587,6 @@ def work(rid,doc,revision,kind,selected,idea,resume_output=None):
                 diagnostics.set_context(shot=voice_index+1,attempt=None)
                 imported=voice_shot.get('imported_clip')
                 if voice_shot.get('voice'):
-                    from finishing import safe_file
                     voice=safe_file(project_dir(PID),voice_shot['voice'])
                 elif not imported:
                     event(rid,'Tamil voice',f'Shot {voice_index+1}: recording the exact line and checking its duration before video generation.')
@@ -578,9 +609,8 @@ def work(rid,doc,revision,kind,selected,idea,resume_output=None):
                     update_run(rid,'running',output)
                     continue
                 from auto_repair import repair_audio,audio_failed,corrections,QualityRetry
-                from finishing import safe_file
                 prior=pending.get(index)
-                candidate=prior['attempts'][-1] if prior else None
+                candidate=newest_clip(prior) if prior else None
                 entry={'index':index,'attempts':list(prior['attempts']) if prior else []}
                 output['shots'].append(entry);output['shots'].sort(key=lambda item:item['index'])
                 update_run(rid,'running',output)
@@ -588,7 +618,7 @@ def work(rid,doc,revision,kind,selected,idea,resume_output=None):
                 if candidate and candidate.get('voice'):
                     voice=safe_file(project_dir(PID),candidate['voice'])
                 imported=shot.get('imported_clip')
-                attempts=1 if imported else max(2,doc['settings']['attempts'])
+                attempts=1 if imported else doc['settings']['attempts']
                 offset=len(entry['attempts'])
                 for cycle in range(1,attempts+1):
                     attempt=offset+cycle
@@ -794,6 +824,21 @@ def queue_release():
     return jsonify(ok=True)
 
 
+@app.post('/api/release/resolve')
+def resolve_release():
+    import re
+    from releases import db
+    data=request.get_json()
+    episode=str(data.get('episode',''));platform=str(data.get('platform',''));action=str(data.get('action',''))
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,60}',episode) or platform not in ('youtube','instagram') or action not in ('retry','submitted'):
+        raise ValueError('Choose a held or failed upload and an action.')
+    with db() as connection:
+        row=connection.execute('SELECT state FROM jobs WHERE episode=? AND platform=?',(episode,platform)).fetchone()
+        if not row or row['state'] not in ('queued','check','failed'):
+            raise ValueError('Only a queued, held or failed upload can be resolved.')
+        connection.execute("UPDATE jobs SET state=?,remote=?,last_error='{}',attempts=0,retry_at=NULL WHERE episode=? AND platform=?",('queued' if action=='retry' else 'submitted',None if action=='retry' else 'confirmed manually',episode,platform))
+    return jsonify(ok=True)
+
 @app.post('/api/growth/metrics')
 def growth_metrics():
     from growth import parse_metrics
@@ -880,9 +925,9 @@ def automation_loop():
                             snapshot=json.loads((project_dir(PID)/'runs'/row['id']/'script.json').read_text(encoding='utf8'))
                             update_run(row['id'],'queued',output)
                             automation.save(state='running',retry_at=None,message='Resuming production from retained shots.')
-                            executor.submit(work,row['id'],snapshot,revision,'render',None,'',output)
-        except ValueError:
-            pass # Another local task is active. Recheck on the next tick.
+                            executor.submit(work,row['id'],snapshot,revision,'render',output.get('selected'),'',output)
+        except Busy:
+            pass # Another local task owns this episode. Recheck on the next tick.
         except Exception as error:
             diagnostics.capture(error,worker='automation')
             automation.save(state='blocked',retry_at=None,message='Automatic worker failed. Download the application log.')
@@ -918,4 +963,3 @@ if __name__=='__main__':
     if '--no-browser' not in sys.argv:
         threading.Timer(1,lambda:webbrowser.open(f'http://127.0.0.1:{PORT}/'+('?first=1' if '--complete-pilot' in sys.argv else ''))).start()
     app.run(host='127.0.0.1',port=PORT,debug=False,use_reloader=False,threaded=True)
-
