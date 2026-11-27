@@ -72,8 +72,21 @@ def render(ep, index, folder, project, on_progress=None):
             f"Local Wan render failed with exit code {result.returncode}. See {log}.")
     from local_video import verify_frames
     verify_frames(raw, first_frame)
+    info = json.loads(subprocess.check_output(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height", "-of", "json", str(raw)],
+        timeout=60))
+    width = info["streams"][0]["width"]
+    height = info["streams"][0]["height"]
+    if abs(width / height - 9 / 16) > .04:
+        raise RuntimeError(f"Wan returned unexpected frame size {width}x{height}.")
+    if width / height > 9 / 16:
+        crop_width, crop_height = int(height * 9 / 16) // 2 * 2, height
+    else:
+        crop_width, crop_height = width, int(width * 16 / 9) // 2 * 2
     subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", str(raw), "-vf", "crop=704:1252",
+        ["ffmpeg", "-v", "error", "-i", str(raw), "-vf",
+         f"crop={crop_width}:{crop_height}",
          "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-y", str(portrait)],
         check=True, timeout=600,
     )
