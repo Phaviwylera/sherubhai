@@ -127,7 +127,26 @@ class LocalPool:
             ep,index,folder,project,on_progress)
 
 
+class LocalWanPool(LocalPool):
+    def generate(self,ep,index,folder,project,on_progress=None):
+        if self.local_available:
+            try:
+                from local_wan import render
+                return render(ep,index,folder,project,on_progress)
+            except (RuntimeError,ValueError,OSError) as error:
+                self.local_available=False
+                import diagnostics
+                diagnostics.capture(error,stage='Local Wan 2.2 render')
+                if on_progress:
+                    on_progress('Local Wan render failed. Checking cloud video providers.')
+        return Pool(folder,ep,project,[index],self.on_progress).generate(
+            ep,index,folder,project,on_progress)
+
+
 def open_pool(folder,ep,project,indexes,on_progress=None):
+    from local_wan import enabled as wan_enabled
+    if wan_enabled():
+        return LocalWanPool(folder,ep,project,indexes,on_progress)
     from local_video import enabled
     if enabled():
         return LocalPool(folder,ep,project,indexes,on_progress)
